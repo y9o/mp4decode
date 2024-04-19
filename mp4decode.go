@@ -351,12 +351,13 @@ func (v *Mp4dec) ReadRaw() (*[3][]byte, error) {
 			v.num_of_frames_in_buffer = -1
 		}
 		var pDst [3][]byte
+		var err error = nil
 		BufferInfo.IBufferStatus = 0
 		if r := v.Decoder.FlushFrame(&pDst, &BufferInfo); r != 0 {
-			return nil, fmt.Errorf("FlushFrame: %d", r)
+			err = fmt.Errorf("FlushFrame: %d", r)
 		}
+		v.DstBufInfo = &BufferInfo
 		if pDst[0] != nil && BufferInfo.IBufferStatus == 1 {
-			v.DstBufInfo = &BufferInfo
 			if data, ok := v.samplesinDecoder[int64(BufferInfo.UiOutYuvTimeStamp)]; ok {
 				delete(v.samplesinDecoder, int64(BufferInfo.UiOutYuvTimeStamp))
 				v.currentSample = &data
@@ -364,7 +365,9 @@ func (v *Mp4dec) ReadRaw() (*[3][]byte, error) {
 				v.currentSample = nil
 			}
 			v.frameNumber++
-			return &pDst, nil
+			return &pDst, err
+		} else if err != nil {
+			return nil, err
 		}
 	}
 	v.num_of_frames_in_buffer = -1
