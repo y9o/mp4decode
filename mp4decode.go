@@ -312,13 +312,14 @@ func (v *Mp4dec) ReadRaw() (*[3][]byte, error) {
 		if len(v.sampleBuffer) > 0 {
 			var pDst [3][]byte
 			var BufferInfo openh264.SBufferInfo
+			var err error = nil
 			BufferInfo.UiInBsTimeStamp = uint64(sample.Number)
 			v.samplesinDecoder[sample.Number] = sample
 			if r := v.Decoder.DecodeFrameNoDelay(v.sampleBuffer, len(v.sampleBuffer), &pDst, &BufferInfo); r != 0 {
-				return nil, fmt.Errorf("DecodeFrameNoDelay: %d len%d %v", r, len(v.sampleBuffer), sample)
+				err = fmt.Errorf("DecodeFrameNoDelay: %d", r)
 			}
+			v.DstBufInfo = &BufferInfo
 			if pDst[0] != nil && BufferInfo.IBufferStatus == 1 {
-				v.DstBufInfo = &BufferInfo
 				if sampledata, ok := v.samplesinDecoder[int64(BufferInfo.UiOutYuvTimeStamp)]; ok {
 					delete(v.samplesinDecoder, int64(BufferInfo.UiOutYuvTimeStamp))
 					v.currentSample = &sampledata
@@ -329,7 +330,9 @@ func (v *Mp4dec) ReadRaw() (*[3][]byte, error) {
 					v.currentSample = nil
 				}
 				v.frameNumber++
-				return &pDst, nil
+				return &pDst, err
+			} else if err != nil {
+				return nil, err
 			}
 		}
 
@@ -374,7 +377,7 @@ func (v *Mp4dec) ReadRaw() (*[3][]byte, error) {
 // openh264内のメモリを参照するので内部で解放されるとアクセスできなくなる。
 func (v *Mp4dec) Read() (*image.YCbCr, error) {
 	buf, err := v.ReadRaw()
-	if err != nil {
+	if buf == nil {
 		return nil, err
 	}
 	t := v.DstBufInfo.UsrData_sSystemBuffer()
@@ -390,7 +393,8 @@ func (v *Mp4dec) Read() (*image.YCbCr, error) {
 		Rect:           image.Rect(0, 0, int(t.IWidth), int(t.IHeight)),
 		SubsampleRatio: image.YCbCrSubsampleRatio420,
 	}
-	return yuv, nil
+	return yuv, err
+
 }
 
 // CurrentFrameNumber first frame: 1
